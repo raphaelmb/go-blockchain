@@ -52,7 +52,7 @@ func (b *Block) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Timestamp    int64          `json:"timestamp"`
 		Nonce        int            `json:"nonce"`
-		PreviousHash string `json:"previous_hash"`
+		PreviousHash string         `json:"previous_hash"`
 		Transactions []*Transaction `json:"transactions"`
 	}{
 		Timestamp:    b.timestamp,
@@ -79,7 +79,7 @@ func NewBlockchain(blockchainAddress string, port uint16) *Blockchain {
 }
 
 func (bc *Blockchain) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct{
+	return json.Marshal(struct {
 		Blocks []*Block `json:"chains"`
 	}{
 		Blocks: bc.chain,
@@ -209,4 +209,19 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		Recipient: t.recipientBlockchainAddress,
 		Value:     t.value,
 	})
+}
+
+type TransactionRequest struct {
+	SenderBlockchainAddress    *string  `json:"sender_blockchain_address"`
+	RecipientBlockchainAddress *string  `json:"recipient_blockchain_address"`
+	SenderPublicKey            *string  `json:"sender_public_key"`
+	Value                      *float32 `json:"value"`
+	Signature                  *string  `json:"signature"`
+}
+
+func (tr *TransactionRequest) Validate() bool {
+	if tr.SenderBlockchainAddress == nil || tr.RecipientBlockchainAddress == nil || tr.SenderPublicKey == nil || tr.Value == nil || tr.Signature == nil {
+		return false
+	}
+	return true
 }
