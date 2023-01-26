@@ -1,12 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/raphaelmb/go-blockchain/block"
+	"github.com/raphaelmb/go-blockchain/utils"
 	"github.com/raphaelmb/go-blockchain/wallet"
 )
 
@@ -30,13 +32,12 @@ func (bcs *BlockchainServer) GetBlockchain() *block.Blockchain {
 		minersWallet := wallet.NewWallet()
 		bc = block.NewBlockchain(minersWallet.BlockchainAddress(), bcs.Port())
 		cache["blockchain"] = bc
-		log.Printf("private_key %v", minersWallet.PrivateKeyStr())
-		log.Printf("public_key %v", minersWallet.PublicKeyStr())
-		log.Printf("blockchain_address %v", minersWallet.BlockchainAddress())
+		// log.Printf("private_key %v", minersWallet.PrivateKeyStr())
+		// log.Printf("public_key %v", minersWallet.PublicKeyStr())
+		// log.Printf("blockchain_address %v", minersWallet.BlockchainAddress())
 	}
 	return bc
 }
-
 
 func (bcs *BlockchainServer) GetChain(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -50,7 +51,56 @@ func (bcs *BlockchainServer) GetChain(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (bc *BlockchainServer) Transactions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Add("Content-Type", "application/json")
+		bc := bc.GetBlockchain()
+		transactions := bc.TransactionPool()
+		m, _ := json.Marshal(struct {
+			Transactions []*block.Transaction `json:"transactions"`
+			Length       int                  `json:"length"`
+		}{
+			Transactions: transactions,
+			Length:       len(transactions),
+		})
+		io.WriteString(w, string(m[:]))
+	case http.MethodPost:
+		decoder := json.NewDecoder(r.Body)
+		var t block.TransactionRequest
+		err := decoder.Decode(&t)
+		if err != nil {
+			log.Printf("ERROR: %v", err)
+			io.WriteString(w, string(utils.JsonStatus("fail")))
+			return
+		}
+		if !t.Validate() {
+			log.Printf("Error: missing field(s)")
+			io.WriteString(w, string(utils.JsonStatus("fail")))
+			return
+		}
+		publicKey := utils.PublicKeyFromString(*t.SenderPublicKey)
+		signature := utils.SignatureFromString(*t.Signature)
+		bc := bc.GetBlockchain()
+		isCreated := bc.CreateTransaction(*t.SenderBlockchainAddress, *t.RecipientBlockchainAddress, *t.Value, publicKey, signature)
+		w.Header().Add("Content-Type", "application/json")
+		var m []byte
+		if !isCreated {
+			w.WriteHeader(http.StatusBadRequest)
+			m = utils.JsonStatus("fail")
+		} else {
+			w.WriteHeader(http.StatusCreated)
+			m = utils.JsonStatus("success")
+		}
+		io.WriteString(w, string(m))
+	default:
+		log.Println("ERROR: Invalid HTTP Method")
+		w.WriteHeader(http.StatusBadRequest)
+	}
+}
+
 func (bcs *BlockchainServer) Run() {
 	http.HandleFunc("/", bcs.GetChain)
+	http.HandleFunc("/transactions", bcs.Transactions)
 	log.Fatal(http.ListenAndServe("0.0.0.0:"+strconv.Itoa(int(bcs.Port())), nil))
 }
