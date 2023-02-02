@@ -149,7 +149,7 @@ func (ws *WalletServer) WalletAmount(w http.ResponseWriter, r *http.Request) {
 			}
 			m, _ := json.Marshal(struct {
 				Message string  `json:"message"`
-				Amount  float32 `json:"amount`
+				Amount  float32 `json:"amount"`
 			}{
 				Message: "success",
 				Amount:  bar.Amount,
